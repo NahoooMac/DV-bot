@@ -76,9 +76,9 @@ async def log_incoming_update(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log Errors caused by Updates and notify the user."""
+    """Log Errors caused by Updates and notify the user (in private chats only)."""
     logger.error(f"Update {update} caused error {context.error}", exc_info=context.error)
-    if isinstance(update, Update) and update.effective_chat:
+    if isinstance(update, Update) and update.effective_chat and update.effective_chat.type == "private":
         try:
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -147,75 +147,79 @@ def main() -> None:
     # Flexible photo & document filter (covers compressed photos and raw image files)
     media_photo_filter = filters.PHOTO | (filters.Document.ALL & ~filters.COMMAND)
 
+    # Strictly limit user-facing application flows to direct private chats.
+    # This completely prevents any bot application dialogs from appearing in admin groups or supergroups.
+    private_chat = filters.ChatType.PRIVATE
+
     # --- Conversation Handler for the DV Form ---
     dv_form_handler = ConversationHandler(
         entry_points=[
-            CommandHandler("newform", start_new_form),
-            MessageHandler(new_form_filter, start_new_form),
+            CommandHandler("newform", start_new_form, filters=private_chat),
+            MessageHandler(new_form_filter & private_chat, start_new_form),
         ],
         states={
-            GET_GENDER: [MessageHandler(gender_filter, get_gender)],
-            GET_SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_surname)],
-            GET_GIVEN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_given_name)],
-            GET_MIDDLE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_middle_name)],
-            GET_DOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_dob)],
-            GET_BIRTH_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_birth_city)],
-            GET_BIRTH_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_birth_country)],
-            GET_ELIGIBILITY_CONFIRM: [MessageHandler(yes_filter | no_filter, get_eligibility_confirm)],
-            GET_ELIGIBILITY_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_eligibility_country)],
-            GET_PASSPORT_CONFIRM: [MessageHandler(yes_filter | no_filter, get_passport_confirm)],
-            GET_PASSPORT_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_passport_number)],
-            GET_PASSPORT_ISSUANCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_passport_issuance)],
-            GET_PASSPORT_EXPIRATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_passport_expiration)],
+            GET_GENDER: [MessageHandler(gender_filter & private_chat, get_gender)],
+            GET_SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_surname)],
+            GET_GIVEN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_given_name)],
+            GET_MIDDLE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_middle_name)],
+            GET_DOB: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_dob)],
+            GET_BIRTH_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_birth_city)],
+            GET_BIRTH_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_birth_country)],
+            GET_ELIGIBILITY_CONFIRM: [MessageHandler((yes_filter | no_filter) & private_chat, get_eligibility_confirm)],
+            GET_ELIGIBILITY_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_eligibility_country)],
+            GET_PASSPORT_CONFIRM: [MessageHandler((yes_filter | no_filter) & private_chat, get_passport_confirm)],
+            GET_PASSPORT_NUMBER: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_passport_number)],
+            GET_PASSPORT_ISSUANCE: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_passport_issuance)],
+            GET_PASSPORT_EXPIRATION: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_passport_expiration)],
 
             GET_APPLICANT_PHOTO: [
-                MessageHandler(media_photo_filter, get_applicant_photo),
+                MessageHandler(media_photo_filter & private_chat, get_applicant_photo),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
-            GET_CURRENT_RESIDENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_current_residence)],
-            GET_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_email)],
-            GET_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            GET_EDUCATION: [MessageHandler(education_filter, get_education)],
-            GET_MARITAL_STATUS: [MessageHandler(marital_status_filter, get_marital_status)],
-            GET_SPOUSE_SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_surname)],
-            GET_SPOUSE_GIVEN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_given_name)],
-            GET_SPOUSE_MIDDLE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_middle_name)],
-            GET_SPOUSE_GENDER: [MessageHandler(gender_filter, get_spouse_gender)],
-            GET_SPOUSE_DOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_dob)],
-            GET_SPOUSE_BIRTH_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_birth_city)],
-            GET_SPOUSE_BIRTH_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_birth_country)],
+            GET_CURRENT_RESIDENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_current_residence)],
+            GET_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_email)],
+            GET_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_phone)],
+            GET_EDUCATION: [MessageHandler(education_filter & private_chat, get_education)],
+            GET_MARITAL_STATUS: [MessageHandler(marital_status_filter & private_chat, get_marital_status)],
+            GET_SPOUSE_SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_spouse_surname)],
+            GET_SPOUSE_GIVEN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_spouse_given_name)],
+            GET_SPOUSE_MIDDLE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_spouse_middle_name)],
+            GET_SPOUSE_GENDER: [MessageHandler(gender_filter & private_chat, get_spouse_gender)],
+            GET_SPOUSE_DOB: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_spouse_dob)],
+            GET_SPOUSE_BIRTH_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_spouse_birth_city)],
+            GET_SPOUSE_BIRTH_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_spouse_birth_country)],
 
             GET_SPOUSE_PHOTO: [
-                MessageHandler(media_photo_filter, get_spouse_photo),
+                MessageHandler(media_photo_filter & private_chat, get_spouse_photo),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
-            GET_CHILDREN_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_children_count)],
+            GET_CHILDREN_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_children_count)],
 
             GET_CHILD_INFO: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_child_info),
-                MessageHandler(media_photo_filter, get_child_info),
+                MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, get_child_info),
+                MessageHandler(media_photo_filter & private_chat, get_child_info),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
-            GET_FINAL_CONFIRM: [MessageHandler(confirm_filter | edit_filter, get_final_confirm)],
+            GET_FINAL_CONFIRM: [MessageHandler((confirm_filter | edit_filter) & private_chat, get_final_confirm)],
             GET_PAYMENT_SCREENSHOT: [
-                MessageHandler(media_photo_filter, get_payment_screenshot),
+                MessageHandler(media_photo_filter & private_chat, get_payment_screenshot),
                 CallbackQueryHandler(handle_chapa_callback, pattern="^chapa:")
             ],
             CONFIRM_CANCEL_FORM: [CallbackQueryHandler(handle_soft_cancel, pattern="^soft_cancel_")],
         },
         fallbacks=[
-            CommandHandler("cancel", cancel),
-            CommandHandler("start", start_main_menu),
-            CommandHandler("help", show_help),
-            MessageHandler(help_filter, show_help),
-            CommandHandler("mydata", show_my_data),
-            MessageHandler(my_data_filter, show_my_data),
-            CommandHandler("support", show_support),
-            MessageHandler(support_filter, show_support),
-            CommandHandler("cleardata", clear_data_command),
-            MessageHandler(cleardata_filter, clear_data_command),
-            MessageHandler(filters.TEXT & ~filters.COMMAND, invalid_text_handler),
-            MessageHandler(filters.PHOTO | filters.Document.ALL, invalid_photo_handler),
+            CommandHandler("cancel", cancel, filters=private_chat),
+            CommandHandler("start", start_main_menu, filters=private_chat),
+            CommandHandler("help", show_help, filters=private_chat),
+            MessageHandler(help_filter & private_chat, show_help),
+            CommandHandler("mydata", show_my_data, filters=private_chat),
+            MessageHandler(my_data_filter & private_chat, show_my_data),
+            CommandHandler("support", show_support, filters=private_chat),
+            MessageHandler(support_filter & private_chat, show_support),
+            CommandHandler("cleardata", clear_data_command, filters=private_chat),
+            MessageHandler(cleardata_filter & private_chat, clear_data_command),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, invalid_text_handler),
+            MessageHandler((filters.PHOTO | filters.Document.ALL) & private_chat, invalid_photo_handler),
         ],
         name="dv_form_conversation",
         persistent=True
@@ -224,14 +228,14 @@ def main() -> None:
     # --- Top-level Conversation Handler for Language Selection ---
     lang_handler = ConversationHandler(
         entry_points=[
-            CommandHandler("start", start),
-            CommandHandler("cleardata", start_reset),
-            MessageHandler(language_filter, start_reset),
+            CommandHandler("start", start, filters=private_chat),
+            CommandHandler("cleardata", start_reset, filters=private_chat),
+            MessageHandler(language_filter & private_chat, start_reset),
         ],
         states={
-            SELECT_LANGUAGE: [MessageHandler(filters.Regex(r'^(English 🇬🇧|Amharic 🇪🇹|Oromiffa 🇪🇹|Tigrigna 🇪🇹)$'), language_select)],
+            SELECT_LANGUAGE: [MessageHandler(filters.Regex(r'^(English 🇬🇧|Amharic 🇪🇹|Oromiffa 🇪🇹|Tigrigna 🇪🇹)$') & private_chat, language_select)],
         },
-        fallbacks=[CommandHandler("start", start)],
+        fallbacks=[CommandHandler("start", start, filters=private_chat)],
         name="language_selection",
         persistent=True,
     )
@@ -242,46 +246,40 @@ def main() -> None:
     # Logging all updates in real-time
     application.add_handler(TypeHandler(Update, log_incoming_update), group=-1)
 
-    # --- Ad Broadcast Handlers (Group & Direct Admin Broadcasting) ---
-    application.add_handler(CommandHandler("ad", handle_ad_broadcast))
-    ad_caption_filter = filters.CaptionRegex(r"(?i)^(@[a-zA-Z0-9_]+\s+)?/ad(@[a-zA-Z0-9_]+)?(\s+@[a-zA-Z0-9_]+)?(\s+|$)")
-    application.add_handler(MessageHandler(ad_caption_filter, handle_ad_broadcast))
-    ad_mention_text_filter = filters.Regex(r"(?i)^@[a-zA-Z0-9_]+\s+/ad(@[a-zA-Z0-9_]+)?(\s+|$)")
-    application.add_handler(MessageHandler(ad_mention_text_filter, handle_ad_broadcast))
-    application.add_handler(CallbackQueryHandler(handle_ad_callback, pattern="^ad_broadcast:"))
-
     # Chapa callback query handler
     application.add_handler(CallbackQueryHandler(handle_chapa_callback, pattern="^chapa:"))
 
     application.add_handler(lang_handler)
     application.add_handler(dv_form_handler)
 
-    # --- Top-level photo & document handler (catches photos sent outside active form) ---
-    application.add_handler(MessageHandler(media_photo_filter, handle_top_level_photo))
+    # --- Top-level photo & document handler (catches photos sent outside active form in private chat) ---
+    application.add_handler(MessageHandler(media_photo_filter & private_chat, handle_top_level_photo))
 
-    # --- Add other top-level handlers (Main Menu) ---
-    application.add_handler(MessageHandler(my_data_filter, show_my_data))
-    application.add_handler(CommandHandler("mydata", show_my_data))
+    # --- Add other top-level handlers (Main Menu in private chat only) ---
+    application.add_handler(MessageHandler(my_data_filter & private_chat, show_my_data))
+    application.add_handler(CommandHandler("mydata", show_my_data, filters=private_chat))
 
-    application.add_handler(MessageHandler(help_filter, show_help))
-    application.add_handler(CommandHandler("help", show_help))
+    application.add_handler(MessageHandler(help_filter & private_chat, show_help))
+    application.add_handler(CommandHandler("help", show_help, filters=private_chat))
 
-    application.add_handler(MessageHandler(support_filter, show_support))
-    application.add_handler(CommandHandler("support", show_support))
+    application.add_handler(MessageHandler(support_filter & private_chat, show_support))
+    application.add_handler(CommandHandler("support", show_support, filters=private_chat))
 
-    # Top-level fallback text handler: show main menu instead of dead silence
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start_main_menu))
+    # Top-level fallback text handler: show main menu instead of dead silence ONLY in private chat
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private_chat, start_main_menu))
 
-    # --- Add Admin Handlers ---
+    # --- Add Admin Handlers (Admin group only) ---
+    admin_chat_filter = filters.Chat(chat_id=int(ADMIN_CHAT_ID)) if ADMIN_CHAT_ID else filters.ChatType.GROUPS
     application.add_handler(MessageHandler(
-        filters.Chat(chat_id=int(ADMIN_CHAT_ID)) & filters.REPLY & filters.Document.PDF,
+        admin_chat_filter & filters.REPLY & filters.Document.PDF,
         handle_admin_reply
     ))
     application.add_handler(CallbackQueryHandler(admin_action_handler, pattern="^admin:"))
     
-    # --- Add Broadcast Handlers ---
+    # --- Add Broadcast Handlers (Admin group & Admin users) ---
     application.add_handler(CommandHandler(["ad", "broadcast"], handle_ad_broadcast))
     application.add_handler(MessageHandler(filters.CaptionRegex(r"(?i)^(@\w+\s+)?/(ad|broadcast)\b"), handle_ad_broadcast))
+    application.add_handler(MessageHandler(filters.Regex(r"(?i)^@[a-zA-Z0-9_]+\s+/(ad|broadcast)\b"), handle_ad_broadcast))
     application.add_handler(CallbackQueryHandler(handle_ad_callback, pattern="^ad_broadcast:"))
     # Interactive broadcast listener for admin media and message inputs
     application.add_handler(MessageHandler(

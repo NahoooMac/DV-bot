@@ -110,6 +110,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     Smarter /start command.
     Shows main menu if user exists, otherwise starts language selection.
     """
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
+
     # --- ADD THIS: Log the user every time they /start ---
     user = update.effective_user
     if user:
@@ -126,6 +129,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def start_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Clears all user data and restarts from language selection. (Used for /cleardata)"""
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
     user = update.effective_user
     
     # --- ADD THIS: Log the user every time they reset ---
@@ -178,6 +183,9 @@ async def language_select(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def start_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Shows the main menu."""
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
+
     if "language" not in context.user_data:
         return await start_reset(update, context)
         
@@ -189,6 +197,9 @@ async def start_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Displays the multi-part help message."""
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
+
     if "language" not in context.user_data:
         return await start_reset(update, context)
     
@@ -216,6 +227,9 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def show_support(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Displays the support message."""
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
+
     if "language" not in context.user_data:
         return await start_reset(update, context)
         
@@ -236,6 +250,9 @@ async def show_support(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def show_my_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Displays a summary of the user's submitted data."""
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
+
     if "language" not in context.user_data:
         return await start_reset(update, context)
         
@@ -271,6 +288,8 @@ async def clear_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     Clears all form data and restarts the form from the first question,
     but keeps the user's language.
     """
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
     lang = context.user_data.get("language")
     user_obj = context.user_data.get("user_object")
     
@@ -371,6 +390,9 @@ async def handle_soft_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def start_new_form(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the DV form. Clears old data and asks for Gender."""
+    if update.effective_chat and update.effective_chat.type != "private":
+        return ConversationHandler.END
+
     if "language" not in context.user_data:
         return await start_reset(update, context)
         
@@ -1243,7 +1265,7 @@ async def handle_top_level_photo(update: Update, context: ContextTypes.DEFAULT_T
     Handles photos or image documents uploaded when NOT inside the DV registration form.
     Provides instant validation feedback and prompts the user to start a new form.
     """
-    if not update.message:
+    if not update.message or (update.effective_chat and update.effective_chat.type != "private"):
         return
 
     # Check language
