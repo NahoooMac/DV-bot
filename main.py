@@ -7,9 +7,11 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
-    filters,  # <--- Using v13 import
+    filters,
     DictPersistence,
+    PicklePersistence,
     CallbackQueryHandler,
+    TypeHandler,
 )
 
 # --- NEW Imports for Analytics Job ---
@@ -38,7 +40,8 @@ from handlers import (
     get_spouse_middle_name, get_spouse_gender, get_spouse_dob, get_spouse_birth_city,
     get_spouse_birth_country, get_spouse_photo, get_children_count, get_child_info,
     get_final_confirm, get_payment_screenshot,
-    invalid_text_handler, invalid_photo_handler
+    invalid_text_handler, invalid_photo_handler, handle_top_level_photo,
+    handle_chapa_callback
 )
 from admin_handlers import (
     handle_admin_reply, admin_action_handler, init_db
@@ -48,8 +51,28 @@ from photo_validator import (
 )
 from broadcast import (
     handle_ad_broadcast,
-    handle_ad_callback
+    handle_ad_callback,
+    handle_broadcast_message_input
 )
+
+
+async def log_incoming_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Logs incoming updates for monitoring."""
+    user = update.effective_user
+    uid = user.id if user else "Unknown"
+    uname = f"@{user.username}" if user and user.username else (user.first_name if user else "")
+    if update.message:
+        m = update.message
+        if m.photo:
+            logger.info(f"[Update] User {uid} ({uname}) sent PHOTO ({len(m.photo)} sizes, caption={m.caption!r})")
+        elif m.document:
+            logger.info(f"[Update] User {uid} ({uname}) sent DOCUMENT ({m.document.file_name}, mime={m.document.mime_type})")
+        elif m.text:
+            logger.info(f"[Update] User {uid} ({uname}) sent TEXT: {m.text[:60]!r}")
+        else:
+            logger.info(f"[Update] User {uid} ({uname}) sent MEDIA/OTHER")
+    elif update.callback_query:
+        logger.info(f"[Update] User {uid} ({uname}) sent CALLBACK: {update.callback_query.data!r}")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -75,18 +98,18 @@ def main() -> None:
         logger.critical(f"CRITICAL: Failed to initialize database on startup: {e}")
         return 
 
-    persistence = DictPersistence()
+    persistence = PicklePersistence(filepath="dv_bot_persistence.pickle")
 
-    # --- THIS IS THE CHANGE ---
     application = (
         Application.builder()
         .token(TOKEN)
         .persistence(persistence)
-        .read_timeout(45)  # Wait up to 45 seconds for Telegram to send data
-        .connect_timeout(45) # Wait up to 45 seconds to connect
+        .read_timeout(45)
+        .write_timeout(45)
+        .connect_timeout(45)
+        .pool_timeout(45)
         .build()
     )
-    # --------------------------
 
     # --- Build Regex Filters for Buttons ---
     new_form_filter = build_regex_pattern("new_form_button", prefix="📋 ")
@@ -121,6 +144,9 @@ def main() -> None:
     confirm_filter = build_regex_pattern("confirm")
     edit_filter = build_regex_pattern("edit_restart")
 
+    # Flexible photo & document filter (covers compressed photos and raw image files)
+    media_photo_filter = filters.PHOTO | (filters.Document.ALL & ~filters.COMMAND)
+
     # --- Conversation Handler for the DV Form ---
     dv_form_handler = ConversationHandler(
         entry_points=[
@@ -143,7 +169,7 @@ def main() -> None:
             GET_PASSPORT_EXPIRATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_passport_expiration)],
 
             GET_APPLICANT_PHOTO: [
-                MessageHandler(filters.PHOTO, get_applicant_photo),
+                MessageHandler(media_photo_filter, get_applicant_photo),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
             GET_CURRENT_RESIDENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_current_residence)],
@@ -160,18 +186,21 @@ def main() -> None:
             GET_SPOUSE_BIRTH_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_birth_country)],
 
             GET_SPOUSE_PHOTO: [
-                MessageHandler(filters.PHOTO, get_spouse_photo),
+                MessageHandler(media_photo_filter, get_spouse_photo),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
             GET_CHILDREN_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_children_count)],
 
             GET_CHILD_INFO: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_child_info),
-                MessageHandler(filters.PHOTO, get_child_info),
+                MessageHandler(media_photo_filter, get_child_info),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
             GET_FINAL_CONFIRM: [MessageHandler(confirm_filter | edit_filter, get_final_confirm)],
-            GET_PAYMENT_SCREENSHOT: [MessageHandler(filters.PHOTO, get_payment_screenshot)],
+            GET_PAYMENT_SCREENSHOT: [
+                MessageHandler(media_photo_filter, get_payment_screenshot),
+                CallbackQueryHandler(handle_chapa_callback, pattern="^chapa:")
+            ],
             CONFIRM_CANCEL_FORM: [CallbackQueryHandler(handle_soft_cancel, pattern="^soft_cancel_")],
         },
         fallbacks=[
@@ -186,7 +215,7 @@ def main() -> None:
             CommandHandler("cleardata", clear_data_command),
             MessageHandler(cleardata_filter, clear_data_command),
             MessageHandler(filters.TEXT & ~filters.COMMAND, invalid_text_handler),
-            MessageHandler(filters.PHOTO, invalid_photo_handler),
+            MessageHandler(filters.PHOTO | filters.Document.ALL, invalid_photo_handler),
         ],
         name="dv_form_conversation",
         persistent=True
@@ -210,6 +239,9 @@ def main() -> None:
     # Register the error handler
     application.add_error_handler(error_handler)
 
+    # Logging all updates in real-time
+    application.add_handler(TypeHandler(Update, log_incoming_update), group=-1)
+
     # --- Ad Broadcast Handlers (Group & Direct Admin Broadcasting) ---
     application.add_handler(CommandHandler("ad", handle_ad_broadcast))
     ad_caption_filter = filters.CaptionRegex(r"(?i)^(@[a-zA-Z0-9_]+\s+)?/ad(@[a-zA-Z0-9_]+)?(\s+@[a-zA-Z0-9_]+)?(\s+|$)")
@@ -218,8 +250,14 @@ def main() -> None:
     application.add_handler(MessageHandler(ad_mention_text_filter, handle_ad_broadcast))
     application.add_handler(CallbackQueryHandler(handle_ad_callback, pattern="^ad_broadcast:"))
 
+    # Chapa callback query handler
+    application.add_handler(CallbackQueryHandler(handle_chapa_callback, pattern="^chapa:"))
+
     application.add_handler(lang_handler)
     application.add_handler(dv_form_handler)
+
+    # --- Top-level photo & document handler (catches photos sent outside active form) ---
+    application.add_handler(MessageHandler(media_photo_filter, handle_top_level_photo))
 
     # --- Add other top-level handlers (Main Menu) ---
     application.add_handler(MessageHandler(my_data_filter, show_my_data))
@@ -231,12 +269,25 @@ def main() -> None:
     application.add_handler(MessageHandler(support_filter, show_support))
     application.add_handler(CommandHandler("support", show_support))
 
+    # Top-level fallback text handler: show main menu instead of dead silence
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start_main_menu))
+
     # --- Add Admin Handlers ---
     application.add_handler(MessageHandler(
         filters.Chat(chat_id=int(ADMIN_CHAT_ID)) & filters.REPLY & filters.Document.PDF,
         handle_admin_reply
     ))
     application.add_handler(CallbackQueryHandler(admin_action_handler, pattern="^admin:"))
+    
+    # --- Add Broadcast Handlers ---
+    application.add_handler(CommandHandler(["ad", "broadcast"], handle_ad_broadcast))
+    application.add_handler(MessageHandler(filters.CaptionRegex(r"(?i)^(@\w+\s+)?/(ad|broadcast)\b"), handle_ad_broadcast))
+    application.add_handler(CallbackQueryHandler(handle_ad_callback, pattern="^ad_broadcast:"))
+    # Interactive broadcast listener for admin media and message inputs
+    application.add_handler(MessageHandler(
+        (filters.ALL & ~filters.COMMAND),
+        handle_broadcast_message_input
+    ), group=1)
     
     # --- Analytics Job ---
     job_queue = application.job_queue

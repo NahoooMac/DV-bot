@@ -5,6 +5,9 @@
 
 # Bot persistence & databases
 bot_persistence*
+dv_bot_persistence*
+*.pickle
+*.pkl
 *.db
 *.sqlite3
 

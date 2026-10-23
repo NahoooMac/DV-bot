@@ -36,11 +36,16 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_ENABLED = False
 if GEMINI_API_KEY:
     try:
-        import google.genai as genai
+        import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
         GEMINI_ENABLED = True
     except ImportError:
-        print("Warning: 'google-genai' not installed. Gemini features disabled.")
+        try:
+            from google import genai
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            GEMINI_ENABLED = True
+        except ImportError:
+            print("Warning: Neither 'google-generativeai' nor 'google-genai' installed. Gemini features disabled.")
     except Exception as e:
         print(f"Warning: Failed to configure Gemini: {e}. Gemini features disabled.")
 
@@ -58,6 +63,13 @@ except (ImportError, NameError, Exception) as e:
     print(f"Warning: 'ethiopian-date' library not available ({e}). Date conversion will be skipped.")
     converter = None # Bot will run but skip date conversion
 
+# --- Chapa Payment Gateway ---
+CHAPA_SECRET_KEY = os.environ.get("CHAPA_SECRET_KEY", "").strip()
+CHAPA_API_URL = os.environ.get("CHAPA_API_URL", "https://api.chapa.co/v1").rstrip("/")
+CHAPA_ENABLED = bool(CHAPA_SECRET_KEY)
+DV_SERVICE_FEE = int(os.environ.get("DV_SERVICE_FEE", 350))
+SERVICE_FEE_AMOUNT = DV_SERVICE_FEE
+
 # --- Bot Constants ---
 KEYS_TO_PRESERVE_AFTER_FORM = [
     "language", "user_object", "surname", "given_name", "middle_name", "gender",
@@ -66,10 +78,9 @@ KEYS_TO_PRESERVE_AFTER_FORM = [
     "applicant_photo_id", "current_residence", "email", "phone", "education", "marital_status",
     "spouse_surname", "spouse_given_name", "spouse_middle_name", "spouse_gender",
     "spouse_dob_ec", "spouse_dob_gc", "spouse_birth_city", "spouse_birth_country",
-    "spouse_photo_id", "children", "payment_screenshot_id"
+    "spouse_photo_id", "children", "payment_screenshot_id",
+    "payment_method", "payment_tx_ref", "payment_status"
 ]
-
-SERVICE_FEE_AMOUNT = 350
 
 # --- Load Database variables (Supports Neon DATABASE_URL and standalone PG) ---
 DATABASE_URL = os.environ.get("DATABASE_URL")

@@ -243,12 +243,19 @@ async def forward_to_admin(context: ContextTypes.DEFAULT_TYPE):
                     media=chunk
                 )
         
-        # --- MESSAGE 3: Send PAYMENT photo SEPARATELY (if any) ---
+        # --- MESSAGE 3: Send PAYMENT photo / verification info ---
         if user_data.get('payment_screenshot_id'):
             await context.bot.send_photo(
                 chat_id=ADMIN_CHAT_ID,
                 photo=user_data['payment_screenshot_id'],
                 caption="PAYMENT SCREENSHOT"
+            )
+        elif user_data.get('payment_method') == 'chapa':
+            tx_ref = user_data.get('payment_tx_ref', 'N/A')
+            await context.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=f"💳 <b>PAYMENT STATUS:</b> ✅ <b>VERIFIED VIA CHAPA</b>\n<b>Amount:</b> 350 ETB\n<b>Tx Ref:</b> <code>{tx_ref}</code>",
+                parse_mode=ParseMode.HTML
             )
 
         # --- MESSAGE 4: Send the action buttons ---

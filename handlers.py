@@ -22,11 +22,16 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 
 # Local module imports
-from config import logger, converter, IMAGE_ENHANCER_BOT_URL, KEYS_TO_PRESERVE_AFTER_FORM
+from config import (
+    logger, converter, IMAGE_ENHANCER_BOT_URL, KEYS_TO_PRESERVE_AFTER_FORM,
+    DV_MAX_BYTES, DV_MIN_PX, DV_MAX_PX, DV_ASPECT_TOLERANCE,
+    CHAPA_ENABLED, DV_SERVICE_FEE
+)
 from states import * # Import all states
 from text import get_text, format_summary
 from admin_handlers import forward_to_admin, get_db_connection # <-- Import get_db_connection
 from photo_validator import validate_dv_photo_and_store # Import validator
+from chapa_client import initialize_chapa_transaction, verify_chapa_transaction
 
 # --- Helper Functions (for this file) ---
 
@@ -1003,6 +1008,52 @@ async def get_final_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if text == get_text('edit_restart', context):
         return await start_new_form(update, context)
     
+    context.user_data['form_step'] = GET_PAYMENT_SCREENSHOT
+    
+    user = update.effective_user
+    user_id = user.id if user else 0
+    email = context.user_data.get("email", "")
+    first_name = context.user_data.get("given_name", "")
+    last_name = context.user_data.get("surname", "")
+    phone = context.user_data.get("phone", "")
+
+    # Check if Chapa is enabled and try to initialize checkout
+    chapa_init = None
+    if CHAPA_ENABLED:
+        try:
+            chapa_init = await initialize_chapa_transaction(
+                user_id=user_id,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                phone_number=phone,
+                amount=DV_SERVICE_FEE
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Chapa transaction: {e}")
+
+    if chapa_init and chapa_init.get("success"):
+        checkout_url = chapa_init["checkout_url"]
+        tx_ref = chapa_init["tx_ref"]
+        context.user_data["chapa_tx_ref"] = tx_ref
+
+        keyboard = [
+            [InlineKeyboardButton(f"💳 Pay {DV_SERVICE_FEE} ETB via Chapa (Telebirr / CBE / Card)", url=checkout_url)],
+            [InlineKeyboardButton("🔄 I Have Completed Payment (Verify)", callback_data=f"chapa:verify:{tx_ref}")],
+            [InlineKeyboardButton("📸 Pay Manually & Upload Receipt", callback_data="chapa:manual")]
+        ]
+        await update.message.reply_text(
+            f"🎉 <b>Application details confirmed!</b>\n\n"
+            f"To complete your submission, there is a <b>{DV_SERVICE_FEE} Birr</b> service fee.\n\n"
+            f"⚡ <b>Fast Online Payment (Instant Verification):</b>\n"
+            f"Tap the button below to pay via <b>Telebirr, CBE Birr, or Debit Card</b> with Chapa. Once paid, click <b>Verify Payment</b>.\n\n"
+            f"Or you can choose manual bank transfer below.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
+        return GET_PAYMENT_SCREENSHOT
+
+    # Fallback to manual payment instructions
     await update.message.reply_text(
         get_text('form_complete_payment', context),
         reply_markup=ReplyKeyboardRemove()
@@ -1014,14 +1065,95 @@ async def get_final_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(
         get_text('payment_ask_screenshot', context)
     )
-    context.user_data['form_step'] = GET_PAYMENT_SCREENSHOT
+    return GET_PAYMENT_SCREENSHOT
+
+
+async def handle_chapa_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handles Chapa verification and manual switch inline callbacks."""
+    query = update.callback_query
+    if not query:
+        return GET_PAYMENT_SCREENSHOT
+        
+    data = query.data or ""
+    
+    if data.startswith("chapa:verify:"):
+        tx_ref = data.split("chapa:verify:", 1)[1].strip()
+        await query.answer("🔍 Checking payment status with Chapa...", show_alert=False)
+        
+        try:
+            res = await verify_chapa_transaction(tx_ref)
+        except Exception as e:
+            logger.error(f"Chapa verification error: {e}")
+            res = {"success": False, "error": str(e)}
+
+        if res.get("success"):
+            context.user_data["payment_method"] = "chapa"
+            context.user_data["payment_tx_ref"] = tx_ref
+            context.user_data["payment_status"] = "verified"
+            
+            await query.edit_message_text(
+                "✅ <b>Payment Verified!</b>\n\nYour payment via Chapa has been successfully confirmed.",
+                parse_mode=ParseMode.HTML
+            )
+            
+            # Forward submission to admin
+            await forward_to_admin(context)
+            
+            # Send completion success to user
+            await query.message.reply_text(
+                get_text('form_complete_success', context),
+                reply_markup=get_main_menu_keyboard(context)
+            )
+            
+            # Clear temporary form fields
+            temp_keys = ['form_step', 'children_total', 'children_collected', 'current_child', 'pending_action', 'chapa_tx_ref']
+            for key in temp_keys:
+                context.user_data.pop(key, None)
+            
+            preserved_data = {}
+            for key in KEYS_TO_PRESERVE_AFTER_FORM:
+                if key in context.user_data:
+                    preserved_data[key] = context.user_data[key]
+            
+            context.user_data.clear()
+            context.user_data.update(preserved_data)
+            
+            return ConversationHandler.END
+        else:
+            status_desc = res.get("status", "pending")
+            await query.answer(
+                f"⏳ Payment not yet completed (status: {status_desc}).\nPlease complete the payment on Chapa first, then tap Verify.",
+                show_alert=True
+            )
+            return GET_PAYMENT_SCREENSHOT
+
+    elif data == "chapa:manual":
+        await query.answer()
+        await query.message.reply_text(
+            get_text('form_complete_payment', context)
+        )
+        await query.message.reply_text(
+            get_text('payment_details', context),
+            parse_mode=ParseMode.MARKDOWN
+        )
+        await query.message.reply_text(
+            get_text('payment_ask_screenshot', context)
+        )
+        return GET_PAYMENT_SCREENSHOT
+        
     return GET_PAYMENT_SCREENSHOT
 
 async def get_payment_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if not update.message.photo:
+    photo_file = None
+    if update.message.photo:
+        photo_file = await update.message.photo[-1].get_file()
+    elif update.message.document:
+        photo_file = await update.message.document.get_file()
+
+    if not photo_file:
         await update.message.reply_text(get_text("invalid_photo", context))
         return GET_PAYMENT_SCREENSHOT
-    photo_file = await update.message.photo[-1].get_file()
+
     context.user_data["payment_screenshot_id"] = photo_file.file_id
     
     await update.message.reply_text(get_text('payment_received', context))
@@ -1092,19 +1224,84 @@ async def invalid_photo_handler(update: Update, context: ContextTypes.DEFAULT_TY
     current_state = context.user_data.get('form_step')
     
     if current_state == GET_APPLICANT_PHOTO:
-         logger.warning(f"Patching invalid_photo_handler call for state {current_state}.")
+         logger.warning(f"Routing photo directly to get_applicant_photo for state {current_state}.")
          return await get_applicant_photo(update, context)
     if current_state == GET_SPOUSE_PHOTO:
-         logger.warning(f"Patching invalid_photo_handler call for state {current_state}.")
+         logger.warning(f"Routing photo directly to get_spouse_photo for state {current_state}.")
          return await get_spouse_photo(update, context)
     if current_state == GET_CHILD_INFO:
-         logger.warning(f"Patching invalid_photo_handler call for state {current_state}.")
+         logger.warning(f"Routing photo directly to get_child_info for state {current_state}.")
          return await get_child_info(update, context)
     if current_state == GET_PAYMENT_SCREENSHOT:
-         logger.warning(f"Patching invalid_photo_handler call for state {current_state}.")
+         logger.warning(f"Routing photo directly to get_payment_screenshot for state {current_state}.")
          return await get_payment_screenshot(update, context)
     
-    await update.message.reply_text(get_text('invalid_text', context))
+    await update.message.reply_text(
+        "⚠️ You sent a photo, but we are currently waiting for your answer to the question above.\n"
+        "Please type your answer, or type /cancel to go back to the main menu."
+    )
     if current_state is None:
         return await start_main_menu(update, context)
     return current_state
+
+
+async def handle_top_level_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handles photos or image documents uploaded when NOT inside the DV registration form.
+    Provides instant validation feedback and prompts the user to start a new form.
+    """
+    if not update.message:
+        return
+
+    # Check language
+    if "language" not in context.user_data:
+        await start_reset(update, context)
+        return
+
+    photo_obj = None
+    if update.message.photo:
+        photo_obj = update.message.photo[-1]
+    elif update.message.document:
+        doc = update.message.document
+        if (doc.mime_type and doc.mime_type.startswith("image/")) or (doc.file_name and doc.file_name.lower().endswith(('.jpg', '.jpeg', '.png'))):
+            photo_obj = doc
+
+    if not photo_obj:
+        await update.message.reply_text(
+            get_text("fallback", context),
+            reply_markup=get_main_menu_keyboard(context)
+        )
+        return
+
+    file_size = getattr(photo_obj, "file_size", None)
+    width = getattr(photo_obj, "width", None)
+    height = getattr(photo_obj, "height", None)
+
+    issues = []
+    if file_size and file_size > DV_MAX_BYTES:
+        issues.append(f"File size ({round(file_size/1024)} KB) exceeds 240 KB limit.")
+    if width and height:
+        if width < DV_MIN_PX or height < DV_MIN_PX or width > DV_MAX_PX or height > DV_MAX_PX:
+            issues.append(f"Dimensions ({width}×{height}) should be between 600×600 and 1200×1200.")
+        if abs(width - height) > max(1, DV_ASPECT_TOLERANCE * width):
+            issues.append("Photo must be square (1:1 aspect ratio).")
+
+    if issues:
+        feedback = "\n".join(f"• {issue}" for issue in issues)
+        msg = (
+            f"📸 <b>Photo Received!</b>\n\n"
+            f"⚠️ <b>DV Photo Check:</b>\n{feedback}\n\n"
+            f"To begin your official DV lottery application, tap <b>📋 New Form</b> below."
+        )
+    else:
+        msg = (
+            f"📸 <b>Photo Received!</b>\n\n"
+            f"✅ This photo meets basic DV lottery dimensions and size requirements!\n\n"
+            f"To use this photo and submit your official DV lottery application, please tap <b>📋 New Form</b> below."
+        )
+
+    await update.message.reply_text(
+        msg,
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_main_menu_keyboard(context)
+    )
