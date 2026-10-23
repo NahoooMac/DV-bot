@@ -33,7 +33,7 @@ from config import (
     SERVICE_FEE_AMOUNT
 )
 from states import (
-    GET_APPLICANT_PHOTO, GET_EMAIL, GET_CHILDREN_COUNT, GET_CHILD_INFO,
+    GET_APPLICANT_PHOTO, GET_CURRENT_RESIDENCE, GET_EMAIL, GET_CHILDREN_COUNT, GET_CHILD_INFO,
     GET_SPOUSE_PHOTO, GET_PAYMENT_SCREENSHOT
 )
 from text import get_text
@@ -220,7 +220,9 @@ async def validate_dv_photo_and_store(update, context, user_data_key: str = "app
         else:
             await reply("✅ Photo passed automated DV checks (size, square, face, background).")
             # Manually advance the conversation
-            if next_state == GET_EMAIL:
+            if next_state == GET_CURRENT_RESIDENCE:
+                await update.message.reply_text(get_text("ask_current_residence", context))
+            elif next_state == GET_EMAIL:
                 await update.message.reply_text(get_text("ask_email", context))
             elif next_state == GET_CHILDREN_COUNT:
                 await update.message.reply_text(get_text("ask_children_count", context), reply_markup=ReplyKeyboardRemove())
@@ -306,7 +308,10 @@ async def handle_ai_check_callback(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("✅ AI check skipped. Moving on...")
         cleanup_temp_file()
             
-        if next_state == GET_EMAIL:
+        if next_state == GET_CURRENT_RESIDENCE:
+            await context.bot.send_message(chat_id=query.message.chat.id, text=get_text("ask_current_residence", context))
+            return GET_CURRENT_RESIDENCE
+        elif next_state == GET_EMAIL:
             await context.bot.send_message(chat_id=query.message.chat.id, text=get_text("ask_email", context))
             return GET_EMAIL
         elif next_state == GET_CHILDREN_COUNT:
@@ -332,7 +337,10 @@ async def handle_ai_check_callback(update: Update, context: ContextTypes.DEFAULT
 
             if gemini_result.get("pass", False):
                 await query.edit_message_text("✅ AI check passed! Moving on...")
-                if next_state == GET_EMAIL:
+                if next_state == GET_CURRENT_RESIDENCE:
+                    await context.bot.send_message(chat_id=query.message.chat.id, text=get_text("ask_current_residence", context))
+                    return GET_CURRENT_RESIDENCE
+                elif next_state == GET_EMAIL:
                     await context.bot.send_message(chat_id=query.message.chat.id, text=get_text("ask_email", context))
                     return GET_EMAIL
                 elif next_state == GET_CHILDREN_COUNT:

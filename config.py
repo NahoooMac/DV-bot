@@ -52,10 +52,11 @@ except (ImportError, NameError, Exception) as e:
 KEYS_TO_PRESERVE_AFTER_FORM = [
     "language", "user_object", "surname", "given_name", "middle_name", "gender",
     "dob_ec", "dob_gc", "birth_city", "birth_country", "eligibility_country",
-    "email", "phone", "education", "marital_status", "applicant_photo_id",
     "passport_number", "passport_issuance", "passport_expiration_ec", "passport_expiration_gc",
-    "spouse_surname", "spouse_given_name", "spouse_middle_name", "spouse_dob_ec", "spouse_dob_gc",
-    "spouse_birth_country", "spouse_photo_id", "children", "payment_screenshot_id"
+    "applicant_photo_id", "current_residence", "email", "phone", "education", "marital_status",
+    "spouse_surname", "spouse_given_name", "spouse_middle_name", "spouse_gender",
+    "spouse_dob_ec", "spouse_dob_gc", "spouse_birth_city", "spouse_birth_country",
+    "spouse_photo_id", "children", "payment_screenshot_id"
 ]
 
 SERVICE_FEE_AMOUNT = 350

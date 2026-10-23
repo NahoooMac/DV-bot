@@ -287,7 +287,6 @@ async def clear_data_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     keyboard = [
         [KeyboardButton(get_text("gender_male", context))],
         [KeyboardButton(get_text("gender_female", context))],
-        [KeyboardButton(get_text("gender_other", context))],
     ]
     await update.message.reply_text(
         get_text("ask_gender", context),
@@ -383,7 +382,6 @@ async def start_new_form(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     keyboard = [
         [KeyboardButton(get_text("gender_male", context))],
         [KeyboardButton(get_text("gender_female", context))],
-        [KeyboardButton(get_text("gender_other", context))],
     ]
     await update.message.reply_text(
         get_text("ask_gender", context),
@@ -395,12 +393,10 @@ async def start_new_form(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # --- Step 1-2: Gender & Name ---
 async def get_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text
-    if text == get_text("gender_male", context):
-        context.user_data["gender"] = "Male"
-    elif text == get_text("gender_female", context):
+    if text == get_text("gender_female", context):
         context.user_data["gender"] = "Female"
     else:
-        context.user_data["gender"] = "Other"
+        context.user_data["gender"] = "Male"
         
     await update.message.reply_text(
         get_text("ask_surname", context),
@@ -596,8 +592,14 @@ async def get_applicant_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
         update, 
         context, 
         user_data_key="applicant_photo_id", 
-        next_state=GET_EMAIL
+        next_state=GET_CURRENT_RESIDENCE
     )
+
+async def get_current_residence(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["current_residence"] = update.message.text.upper()
+    await update.message.reply_text(get_text("ask_email", context))
+    context.user_data['form_step'] = GET_EMAIL
+    return GET_EMAIL
 
 async def get_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     email = update.message.text.strip()
@@ -642,7 +644,8 @@ async def get_education(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     keyboard = [
         [KeyboardButton(get_text("status_single", context))],
-        [KeyboardButton(get_text("status_married", context))],
+        [KeyboardButton(get_text("status_married_non_us", context))],
+        [KeyboardButton(get_text("status_married_us", context))],
         [KeyboardButton(get_text("status_divorced", context))],
         [KeyboardButton(get_text("status_widowed", context))],
         [KeyboardButton(get_text("status_separated", context))],
@@ -658,7 +661,7 @@ async def get_marital_status(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = update.message.text
     context.user_data["marital_status"] = text
     
-    if text == get_text("status_married", context):
+    if text in [get_text("status_married_non_us", context), get_text("status_married", context)]:
         await update.message.reply_text(
             get_text("ask_spouse_surname", context),
             reply_markup=ReplyKeyboardRemove(),
@@ -666,6 +669,17 @@ async def get_marital_status(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         context.user_data['form_step'] = GET_SPOUSE_SURNAME
         return GET_SPOUSE_SURNAME
+    elif text == get_text("status_married_us", context):
+        await update.message.reply_text(
+            get_text("spouse_is_us_citizen_note", context),
+            reply_markup=ReplyKeyboardRemove()
+        )
+        await update.message.reply_text(
+            get_text("ask_children_count", context),
+            reply_markup=ReplyKeyboardRemove()
+        )
+        context.user_data['form_step'] = GET_CHILDREN_COUNT
+        return GET_CHILDREN_COUNT
     else:
         await update.message.reply_text(
             get_text("ask_children_count", context),
@@ -700,15 +714,39 @@ async def get_spouse_middle_name(update: Update, context: ContextTypes.DEFAULT_T
     else:
         context.user_data["spouse_middle_name"] = text.upper()
         
+    keyboard = [
+        [KeyboardButton(get_text("gender_male", context))],
+        [KeyboardButton(get_text("gender_female", context))],
+    ]
+    await update.message.reply_text(
+        get_text("ask_spouse_gender", context),
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    )
+    context.user_data['form_step'] = GET_SPOUSE_GENDER
+    return GET_SPOUSE_GENDER
+
+async def get_spouse_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text
+    if text == get_text("gender_female", context):
+        context.user_data["spouse_gender"] = "Female"
+    else:
+        context.user_data["spouse_gender"] = "Male"
+        
     if converter is None:
         await update.message.reply_text("Date converter not installed. Skipping date steps.")
         context.user_data['spouse_dob_ec'] = 'N/A'
         context.user_data['spouse_dob_gc'] = 'N/A'
-        await update.message.reply_text(get_text("ask_spouse_birth_country", context))
-        context.user_data['form_step'] = GET_SPOUSE_BIRTH_COUNTRY
-        return GET_SPOUSE_BIRTH_COUNTRY
+        await update.message.reply_text(
+            get_text("ask_spouse_birth_city", context),
+            reply_markup=ReplyKeyboardRemove()
+        )
+        context.user_data['form_step'] = GET_SPOUSE_BIRTH_CITY
+        return GET_SPOUSE_BIRTH_CITY
 
-    await update.message.reply_text(get_text("ask_spouse_dob", context))
+    await update.message.reply_text(
+        get_text("ask_spouse_dob", context),
+        reply_markup=ReplyKeyboardRemove()
+    )
     context.user_data['form_step'] = GET_SPOUSE_DOB
     return GET_SPOUSE_DOB
 
@@ -721,14 +759,20 @@ async def get_spouse_dob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data['spouse_dob_ec'] = date_str
         context.user_data['spouse_dob_gc'] = gc_date.strftime('%d/%m/%Y')
         
-        await update.message.reply_text(get_text("ask_spouse_birth_country", context))
-        context.user_data['form_step'] = GET_SPOUSE_BIRTH_COUNTRY
-        return GET_SPOUSE_BIRTH_COUNTRY
+        await update.message.reply_text(get_text("ask_spouse_birth_city", context))
+        context.user_data['form_step'] = GET_SPOUSE_BIRTH_CITY
+        return GET_SPOUSE_BIRTH_CITY
         
     except (ValueError, TypeError, AttributeError) as e:
         logger.warning(f"Invalid date input for GET_SPOUSE_DOB: {update.message.text} - Error: {e}")
         await update.message.reply_text(get_text("invalid_date", context))
         return GET_SPOUSE_DOB
+
+async def get_spouse_birth_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["spouse_birth_city"] = update.message.text.upper()
+    await update.message.reply_text(get_text("ask_spouse_birth_country", context))
+    context.user_data['form_step'] = GET_SPOUSE_BIRTH_COUNTRY
+    return GET_SPOUSE_BIRTH_COUNTRY
 
 async def get_spouse_birth_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["spouse_birth_country"] = update.message.text.upper()
@@ -880,13 +924,34 @@ async def get_child_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             else:
                 current_child['middle_name'] = text_input.upper()
                 
+            keyboard = [
+                [KeyboardButton(get_text("gender_male", context))],
+                [KeyboardButton(get_text("gender_female", context))],
+            ]
+            await update.message.reply_text(
+                get_text('ask_child_gender', context).format(num=child_num_str),
+                reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+            )
+
+        elif 'gender' not in current_child:
+            if text_input == get_text("gender_female", context):
+                current_child['gender'] = "Female"
+            else:
+                current_child['gender'] = "Male"
+
             if converter is None:
                 await update.message.reply_text("Date converter not installed. Skipping date steps.")
                 current_child['dob_ec'] = 'N/A'
                 current_child['dob_gc'] = 'N/A'
-                await update.message.reply_text(get_text('ask_child_birth_country', context).format(num=child_num_str))
+                await update.message.reply_text(
+                    get_text('ask_child_birth_city', context).format(num=child_num_str),
+                    reply_markup=ReplyKeyboardRemove()
+                )
             else:
-                await update.message.reply_text(get_text('ask_child_dob', context).format(num=child_num_str))
+                await update.message.reply_text(
+                    get_text('ask_child_dob', context).format(num=child_num_str),
+                    reply_markup=ReplyKeyboardRemove()
+                )
 
         elif 'dob_ec' not in current_child:
             date_str = text_input
@@ -896,6 +961,10 @@ async def get_child_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             current_child['dob_ec'] = date_str
             current_child['dob_gc'] = gc_date.strftime('%d/%m/%Y')
             
+            await update.message.reply_text(get_text('ask_child_birth_city', context).format(num=child_num_str))
+
+        elif 'birth_city' not in current_child:
+            current_child['birth_city'] = text_input.upper()
             await update.message.reply_text(get_text('ask_child_birth_country', context).format(num=child_num_str))
 
         elif 'birth_country' not in current_child:
@@ -912,7 +981,7 @@ async def get_child_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
 
     except Exception as e:
-        if 'dob_ec' not in current_child and 'middle_name' in current_child:
+        if 'dob_ec' not in current_child and 'gender' in current_child:
             logger.warning(f"Invalid date input for GET_CHILD_INFO (DOB): {update.message.text} - Error: {e}")
             await update.message.reply_text(get_text('invalid_date', context))
         else:
@@ -978,9 +1047,12 @@ async def invalid_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     """Handles text when a photo is expected, or other invalid text."""
     current_state = context.user_data.get('form_step')
     
-    if current_state == GET_GENDER:
+    if current_state in [GET_GENDER, GET_SPOUSE_GENDER]:
          logger.warning(f"Patching invalid_text_handler call for state {current_state}.")
-         return await get_gender(update, context)
+         if current_state == GET_GENDER:
+             return await get_gender(update, context)
+         else:
+             return await get_spouse_gender(update, context)
     
     if current_state in [GET_APPLICANT_PHOTO, GET_SPOUSE_PHOTO, GET_PAYMENT_SCREENSHOT]:
         await update.message.reply_text(

@@ -33,10 +33,10 @@ from handlers import (
     get_dob, get_birth_city, get_birth_country,
     get_eligibility_confirm, get_eligibility_country,
     get_passport_confirm, get_passport_number, get_passport_issuance, get_passport_expiration,
-    get_applicant_photo, get_email, get_phone, get_education,
+    get_applicant_photo, get_current_residence, get_email, get_phone, get_education,
     get_marital_status, get_spouse_surname, get_spouse_given_name,
-    get_spouse_middle_name, get_spouse_dob, get_spouse_birth_country,
-    get_spouse_photo, get_children_count, get_child_info,
+    get_spouse_middle_name, get_spouse_gender, get_spouse_dob, get_spouse_birth_city,
+    get_spouse_birth_country, get_spouse_photo, get_children_count, get_child_info,
     get_final_confirm, get_payment_screenshot,
     invalid_text_handler, invalid_photo_handler
 )
@@ -92,7 +92,7 @@ def main() -> None:
     support_filter = filters.Regex(r"^💬 Support$")
     cleardata_filter = filters.Regex(r"^🗑️ Clear Data$")
 
-    gender_filter = build_regex_pattern("gender_male") | build_regex_pattern("gender_female") | build_regex_pattern("gender_other")
+    gender_filter = build_regex_pattern("gender_male") | build_regex_pattern("gender_female")
     yes_filter = build_regex_pattern("yes")
     no_filter = build_regex_pattern("no")
     education_filter = (
@@ -107,6 +107,8 @@ def main() -> None:
     )
     marital_status_filter = (
         build_regex_pattern("status_single") |
+        build_regex_pattern("status_married_non_us") |
+        build_regex_pattern("status_married_us") |
         build_regex_pattern("status_married") |
         build_regex_pattern("status_divorced") |
         build_regex_pattern("status_widowed") |
@@ -140,6 +142,7 @@ def main() -> None:
                 MessageHandler(filters.PHOTO, get_applicant_photo),
                 CallbackQueryHandler(handle_ai_check_callback, pattern="^dv:")
             ],
+            GET_CURRENT_RESIDENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_current_residence)],
             GET_EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_email)],
             GET_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
             GET_EDUCATION: [MessageHandler(education_filter, get_education)],
@@ -147,7 +150,9 @@ def main() -> None:
             GET_SPOUSE_SURNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_surname)],
             GET_SPOUSE_GIVEN_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_given_name)],
             GET_SPOUSE_MIDDLE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_middle_name)],
+            GET_SPOUSE_GENDER: [MessageHandler(gender_filter, get_spouse_gender)],
             GET_SPOUSE_DOB: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_dob)],
+            GET_SPOUSE_BIRTH_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_birth_city)],
             GET_SPOUSE_BIRTH_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_spouse_birth_country)],
 
             GET_SPOUSE_PHOTO: [

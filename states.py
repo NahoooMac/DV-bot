@@ -1,5 +1,5 @@
 # --- State Definitions for ConversationHandler ---
-# Using numeric states is best practice
+# Updated for DV-2027 / DV-2028 Electronic Diversity Visa (DS-5501) Requirements
 (
     SELECT_LANGUAGE,
     GET_GENDER,
@@ -16,6 +16,7 @@
     GET_PASSPORT_ISSUANCE,
     GET_PASSPORT_EXPIRATION,
     GET_APPLICANT_PHOTO,
+    GET_CURRENT_RESIDENCE,       # Official Question 9: Country where you live today
     GET_EMAIL,
     GET_PHONE,
     GET_EDUCATION,
@@ -23,14 +24,16 @@
     GET_SPOUSE_SURNAME,
     GET_SPOUSE_GIVEN_NAME,
     GET_SPOUSE_MIDDLE_NAME,
+    GET_SPOUSE_GENDER,           # Part Two: Mandatory Spouse Gender
     GET_SPOUSE_DOB,
+    GET_SPOUSE_BIRTH_CITY,       # Part Two: Mandatory Spouse City of Birth
     GET_SPOUSE_BIRTH_COUNTRY,
     GET_SPOUSE_PHOTO,
     GET_CHILDREN_COUNT,
-    GET_CHILD_INFO,  # This single state will handle the child loop
+    GET_CHILD_INFO,              # Child loop: Surname, Given, Middle, Gender, DOB, Birth City, Country, Photo
     GET_FINAL_CONFIRM,
     GET_PAYMENT_SCREENSHOT,
-) = range(29) # 29 states from 0 to 28
+) = range(32) # 32 states from 0 to 31
 
-# New state for the confirmation pop-up
-CONFIRM_CANCEL_FORM = 30 # Use a high number to avoid conflict
+# State for the confirmation pop-up
+CONFIRM_CANCEL_FORM = 50 # High number to avoid conflict
