@@ -14,6 +14,7 @@ from telegram import (
     ReplyKeyboardRemove,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    WebAppInfo,
 )
 from telegram.ext import (
     ContextTypes,
@@ -1068,7 +1069,7 @@ async def get_final_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data["chapa_tx_ref"] = tx_ref
 
         keyboard.append([
-            InlineKeyboardButton("💳 Pay with Chapa (Telebirr, CBE...)", url=checkout_url)
+            InlineKeyboardButton("💳 Pay with Chapa (Telebirr, CBE...)", web_app=WebAppInfo(url=checkout_url))
         ])
         keyboard.append([
             InlineKeyboardButton("🔄 Verify Payment", callback_data=f"chapa:verify:{tx_ref}")
