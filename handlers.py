@@ -1206,10 +1206,13 @@ async def invalid_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
          else:
              return await get_spouse_gender(update, context)
     
-    if current_state in [GET_APPLICANT_PHOTO, GET_SPOUSE_PHOTO, GET_PAYMENT_SCREENSHOT]:
+    if current_state == GET_PAYMENT_SCREENSHOT:
+        return await get_final_confirm(update, context)
+
+    if current_state in [GET_APPLICANT_PHOTO, GET_SPOUSE_PHOTO]:
         await update.message.reply_text(
             get_text('invalid_photo', context),
-            reply_markup=get_photo_enhancer_markup(context) if current_state != GET_PAYMENT_SCREENSHOT else None
+            reply_markup=get_photo_enhancer_markup(context)
         )
         return current_state
     
