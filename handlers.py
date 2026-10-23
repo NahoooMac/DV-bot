@@ -1032,38 +1032,32 @@ async def get_final_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except Exception as e:
             logger.error(f"Failed to initialize Chapa transaction: {e}")
 
+    # Combine payment instructions into one single message as requested
+    payment_text = (
+        f"{get_text('form_complete_payment', context).strip()}\n\n"
+        f"{get_text('payment_details', context).strip()}\n\n"
+        f"{get_text('payment_ask_screenshot', context).strip()}"
+    )
+
+    keyboard = []
     if chapa_init and chapa_init.get("success"):
         checkout_url = chapa_init["checkout_url"]
         tx_ref = chapa_init["tx_ref"]
         context.user_data["chapa_tx_ref"] = tx_ref
 
-        keyboard = [
-            [InlineKeyboardButton(f"💳 Pay {DV_SERVICE_FEE} ETB via Chapa (Telebirr / CBE / Card)", url=checkout_url)],
-            [InlineKeyboardButton("🔄 I Have Completed Payment (Verify)", callback_data=f"chapa:verify:{tx_ref}")],
-            [InlineKeyboardButton("📸 Pay Manually & Upload Receipt", callback_data="chapa:manual")]
-        ]
-        await update.message.reply_text(
-            f"🎉 <b>Application details confirmed!</b>\n\n"
-            f"To complete your submission, there is a <b>{DV_SERVICE_FEE} Birr</b> service fee.\n\n"
-            f"⚡ <b>Fast Online Payment (Instant Verification):</b>\n"
-            f"Tap the button below to pay via <b>Telebirr, CBE Birr, or Debit Card</b> with Chapa. Once paid, click <b>Verify Payment</b>.\n\n"
-            f"Or you can choose manual bank transfer below.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML
-        )
-        return GET_PAYMENT_SCREENSHOT
+        keyboard.append([
+            InlineKeyboardButton("💳 Pay with Chapa (Telebirr, CBE...)", url=checkout_url)
+        ])
+        keyboard.append([
+            InlineKeyboardButton("🔄 Verify Payment", callback_data=f"chapa:verify:{tx_ref}")
+        ])
 
-    # Fallback to manual payment instructions
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+
     await update.message.reply_text(
-        get_text('form_complete_payment', context),
-        reply_markup=ReplyKeyboardRemove()
-    )
-    await update.message.reply_text(
-        get_text('payment_details', context),
+        payment_text,
+        reply_markup=reply_markup,
         parse_mode=ParseMode.MARKDOWN
-    )
-    await update.message.reply_text(
-        get_text('payment_ask_screenshot', context)
     )
     return GET_PAYMENT_SCREENSHOT
 
@@ -1129,15 +1123,14 @@ async def handle_chapa_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif data == "chapa:manual":
         await query.answer()
-        await query.message.reply_text(
-            get_text('form_complete_payment', context)
+        payment_text = (
+            f"{get_text('form_complete_payment', context).strip()}\n\n"
+            f"{get_text('payment_details', context).strip()}\n\n"
+            f"{get_text('payment_ask_screenshot', context).strip()}"
         )
         await query.message.reply_text(
-            get_text('payment_details', context),
+            payment_text,
             parse_mode=ParseMode.MARKDOWN
-        )
-        await query.message.reply_text(
-            get_text('payment_ask_screenshot', context)
         )
         return GET_PAYMENT_SCREENSHOT
         

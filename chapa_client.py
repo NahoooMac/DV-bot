@@ -51,7 +51,11 @@ async def initialize_chapa_transaction(
         clean_phone = phone_number.strip().replace(" ", "").replace("-", "")
         if clean_phone.startswith("+251"):
             clean_phone = "0" + clean_phone[4:]
-        payload["phone_number"] = clean_phone
+        elif clean_phone.startswith("251"):
+            clean_phone = "0" + clean_phone[3:]
+        # Only attach if valid 10 digits starting with 09 or 07
+        if len(clean_phone) == 10 and clean_phone.startswith(("09", "07")) and clean_phone.isdigit():
+            payload["phone_number"] = clean_phone
 
     headers = {
         "Authorization": f"Bearer {secret_key}",
@@ -63,6 +67,12 @@ async def initialize_chapa_transaction(
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
             res_json = resp.json()
+
+            # If failed due to phone number, retry once without phone_number
+            if (resp.status_code != 200 or res_json.get("status") != "success") and "phone" in str(res_json).lower() and "phone_number" in payload:
+                payload.pop("phone_number", None)
+                resp = await client.post(url, json=payload, headers=headers)
+                res_json = resp.json()
 
             if resp.status_code == 200 and res_json.get("status") == "success":
                 data = res_json.get("data", {})

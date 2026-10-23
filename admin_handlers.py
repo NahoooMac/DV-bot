@@ -180,6 +180,8 @@ async def forward_to_admin(context: ContextTypes.DEFAULT_TYPE):
     try:
         # 1. Format the FULL text summary
         summary = f"🎉 *New DV Submission* 🎉\n\n"
+        if user_data.get('payment_method') == 'chapa':
+            summary += "💳 *PAID WITH CHAPA* ✅\n\n"
         summary += assignee_line
         
         if user and user.get('id'):
@@ -191,6 +193,12 @@ async def forward_to_admin(context: ContextTypes.DEFAULT_TYPE):
             summary += f"User ID: `{user_id_for_reply}`\n\n"
 
         summary += format_summary(user_data)
+        
+        if user_data.get('payment_method') == 'chapa':
+            tx_ref = user_data.get('payment_tx_ref', 'N/A')
+            summary += f"\n\n💳 *Payment Status:* PAID WITH CHAPA ✅\n*Tx Ref:* `{tx_ref}`\n*Amount:* 350 ETB"
+        else:
+            summary += f"\n\n🧾 *Payment Status:* Manual Transfer (Receipt Attached Below)"
         
         # --- MESSAGE 1: Send the full summary ---
         await context.bot.send_message(
@@ -254,7 +262,13 @@ async def forward_to_admin(context: ContextTypes.DEFAULT_TYPE):
             tx_ref = user_data.get('payment_tx_ref', 'N/A')
             await context.bot.send_message(
                 chat_id=ADMIN_CHAT_ID,
-                text=f"💳 <b>PAYMENT STATUS:</b> ✅ <b>VERIFIED VIA CHAPA</b>\n<b>Amount:</b> 350 ETB\n<b>Tx Ref:</b> <code>{tx_ref}</code>",
+                text=(
+                    f"💳 <b>PAID WITH CHAPA</b> ✅\n\n"
+                    f"<b>Status:</b> Success / Verified\n"
+                    f"<b>Amount:</b> 350 ETB\n"
+                    f"<b>Tx Ref:</b> <code>{tx_ref}</code>\n"
+                    f"⚡ <i>Payment completed and verified via Chapa.</i>"
+                ),
                 parse_mode=ParseMode.HTML
             )
 
@@ -268,8 +282,13 @@ async def forward_to_admin(context: ContextTypes.DEFAULT_TYPE):
         button_text = (
             f"Submission ID: `{submission_id}`\n"
             f"User ID: `{user_id_for_reply}` (Reply to *this* message with PDF)\n"
-            f"Please review the submission above and take action."
         )
+        if user_data.get('payment_method') == 'chapa':
+            button_text += "Payment: *PAID WITH CHAPA* ✅\n"
+        else:
+            button_text += "Payment: *Manual Screenshot Uploaded*\n"
+        button_text += "Please review the submission above and take action."
+        
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
             text=button_text,
