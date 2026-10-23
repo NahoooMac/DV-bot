@@ -14,9 +14,19 @@ if not TOKEN:
     print("Error: BOT_TOKEN not found in .env file.")
     exit()
 
-# Admin Chat ID
+# Admin Configuration
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "-1003274949797")
-ADMIN_USERNAMES = ["@nahoomac", "@abeba"]
+_env_usernames = os.environ.get("ADMIN_USERNAMES")
+if _env_usernames:
+    ADMIN_USERNAMES = [u.strip() for u in _env_usernames.split(",") if u.strip()]
+else:
+    ADMIN_USERNAMES = ["@nahoomac", "@abeba"]
+
+ADMIN_USER_IDS = [
+    int(x.strip()) 
+    for x in os.environ.get("ADMIN_USER_IDS", "").split(",") 
+    if x.strip().isdigit()
+]
 
 # Bot URL
 IMAGE_ENHANCER_BOT_URL = "https://t.me/DV_IMAGE_ENHANCER_BOT"

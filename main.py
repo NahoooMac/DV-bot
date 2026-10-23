@@ -46,6 +46,10 @@ from admin_handlers import (
 from photo_validator import (
     handle_ai_check_callback
 )
+from broadcast import (
+    handle_ad_broadcast,
+    handle_ad_callback
+)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -205,6 +209,14 @@ def main() -> None:
 
     # Register the error handler
     application.add_error_handler(error_handler)
+
+    # --- Ad Broadcast Handlers (Group & Direct Admin Broadcasting) ---
+    application.add_handler(CommandHandler("ad", handle_ad_broadcast))
+    ad_caption_filter = filters.CaptionRegex(r"(?i)^(@[a-zA-Z0-9_]+\s+)?/ad(@[a-zA-Z0-9_]+)?(\s+@[a-zA-Z0-9_]+)?(\s+|$)")
+    application.add_handler(MessageHandler(ad_caption_filter, handle_ad_broadcast))
+    ad_mention_text_filter = filters.Regex(r"(?i)^@[a-zA-Z0-9_]+\s+/ad(@[a-zA-Z0-9_]+)?(\s+|$)")
+    application.add_handler(MessageHandler(ad_mention_text_filter, handle_ad_broadcast))
+    application.add_handler(CallbackQueryHandler(handle_ad_callback, pattern="^ad_broadcast:"))
 
     application.add_handler(lang_handler)
     application.add_handler(dv_form_handler)

@@ -370,6 +370,11 @@ async def start_new_form(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return await start_reset(update, context)
         
     user = update.effective_user
+    if user:
+        try:
+            await asyncio.to_thread(_upsert_user_pg, user)
+        except Exception as e:
+            logger.error(f"Failed to upsert user {user.id} in start_new_form: {e}")
     
     temp_keys = ['form_step', 'children_total', 'children_collected', 'current_child', 'pending_action']
     for key in temp_keys:
