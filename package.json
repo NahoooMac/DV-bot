@@ -1,0 +1,11 @@
+{
+  "name": "dv-bot",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "python -m py_compile main.py config.py handlers.py admin_handlers.py analytics.py photo_validator.py && neon status"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.3",
+    "@neon/env": "^1.6.4"
+  }
+}
